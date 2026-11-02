@@ -20,7 +20,7 @@ info:
     su grupo); los correos de un mismo sistema salen en orden de llegada.
 
     '
-  version: 1.1.0
+  version: 2.0.0
 servers:
 - url: https://jpnbycihugrzeeolobev.supabase.co/functions/v1
   description: Servidor de la API en Supabase
@@ -39,7 +39,7 @@ paths:
       summary: Verificar autenticación
       description: 'Comprueba que la API Key enviada sea válida
 
-        y devuelve los datos del sistema autenticado.
+        y devuelve el nombre del sistema autenticado.
 
 
         La API Key debe enviarse mediante el
@@ -62,16 +62,9 @@ paths:
                   sistema:
                     type: object
                     properties:
-                      id:
-                        type: string
-                        format: uuid
-                        example: 5be58d39-066e-49cd-ba12-d4179e15574a
                       nombre:
                         type: string
                         example: Sistema Externo
-                      tipo:
-                        type: string
-                        example: tercero
         '401':
           description: API Key faltante o inválida
           content:
