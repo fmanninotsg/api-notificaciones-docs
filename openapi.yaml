@@ -1,0 +1,510 @@
+openapi: 3.0.3
+info:
+  title: API de Notificaciones por Email
+  description: 'API REST para el envío de notificaciones por correo electrónico.
+
+
+    Permite a sistemas externos:
+
+    - Autenticarse mediante una API Key.
+
+    - Registrar avisos para uno o varios destinatarios.
+
+    - Consultar el estado de los envíos.
+
+
+    El único canal habilitado es email.
+
+    Los envíos se procesan de forma asíncrona mediante Gmail API. Cada sistema
+    envía desde la cuenta Gmail que tiene asignada (por ejemplo, la cuenta de
+    su grupo); los correos de un mismo sistema salen en orden de llegada.
+
+    '
+  version: 1.1.0
+servers:
+- url: https://jpnbycihugrzeeolobev.supabase.co/functions/v1
+  description: Servidor de la API en Supabase
+security:
+- ApiKeyAuth: []
+tags:
+- name: Autenticación
+  description: Verificación de credenciales de sistemas externos
+- name: Avisos
+  description: Registro y consulta de notificaciones por email
+paths:
+  /avisos:
+    get:
+      tags:
+      - Autenticación
+      summary: Verificar autenticación
+      description: 'Comprueba que la API Key enviada sea válida
+
+        y devuelve los datos del sistema autenticado.
+
+
+        La API Key debe enviarse mediante el
+
+        encabezado X-API-Key.
+
+        '
+      operationId: verificarAutenticacion
+      responses:
+        '200':
+          description: Autenticación exitosa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: Autenticación exitosa
+                  sistema:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        example: 5be58d39-066e-49cd-ba12-d4179e15574a
+                      nombre:
+                        type: string
+                        example: Sistema Externo
+                      tipo:
+                        type: string
+                        example: tercero
+        '401':
+          description: API Key faltante o inválida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                claveFaltante:
+                  summary: No se envió una API Key
+                  value:
+                    error: API Key requerida
+                claveInvalida:
+                  summary: API Key incorrecta
+                  value:
+                    error: Credenciales inválidas
+        '403':
+          description: Credencial o sistema no autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                claveDeshabilitada:
+                  value:
+                    error: Credencial deshabilitada
+                claveVencida:
+                  value:
+                    error: Credencial vencida
+                sistemaInactivo:
+                  value:
+                    error: Sistema no autorizado
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Error interno
+    post:
+      tags:
+      - Avisos
+      summary: Crear un aviso por email
+      description: 'Registra un aviso para uno o varios destinatarios de correo.
+
+
+        El procesamiento es asíncrono: la respuesta inicial
+
+        no significa que los correos ya hayan sido enviados.
+
+
+        El encabezado Idempotency-Key evita crear avisos
+
+        duplicados cuando se repite la misma solicitud: un aviso nuevo
+
+        responde 202 y una repetición con el mismo contenido responde 200
+
+        con el estado actual del aviso.
+
+
+        Solo se permite el canal email.
+
+        '
+      operationId: crearAviso
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: 'Identificador único de la solicitud (máximo 200 caracteres).
+
+          Si se repite con el mismo contenido, se devuelve el aviso
+
+          existente. Si se repite con contenido diferente, se devuelve 409.
+
+          '
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 1
+          type: string
+        example: AVISO-EMAIL-001
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+              - asunto
+              - destinatarios
+              - mensaje
+              type: object
+              properties:
+                asunto:
+                  maxLength: 200
+                  minLength: 1
+                  type: string
+                  example: Aviso de prueba
+                mensaje:
+                  maxLength: 10000
+                  minLength: 1
+                  type: string
+                  example: Este es un correo enviado desde nuestra API.
+                referencia:
+                  type: string
+                  description: Referencia opcional del sistema externo
+                  example: PEDIDO-123
+                  nullable: true
+                destinatarios:
+                  maxItems: 50
+                  minItems: 1
+                  type: array
+                  items:
+                    required:
+                    - canal
+                    - destino
+                    type: object
+                    properties:
+                      canal:
+                        type: string
+                        example: email
+                        enum:
+                        - email
+                      destino:
+                        maxLength: 320
+                        type: string
+                        format: email
+                        example: destinatario@gmail.com
+            example:
+              asunto: Prueba de envío a dos destinatarios
+              mensaje: Este es un correo de prueba enviado desde nuestra API.
+              destinatarios:
+              - canal: email
+                destino: primer_correo@gmail.com
+              - canal: email
+                destino: segundo_correo@gmail.com
+        required: true
+      responses:
+        '202':
+          description: Aviso nuevo aceptado para procesamiento asíncrono.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespuestaAviso'
+              example:
+                id: 696a0cfc-4925-4ee1-8426-41eb5040a0ea
+                estado: pendiente
+                creado: true
+        '200':
+          description: 'Solicitud repetida con la misma Idempotency-Key y el mismo
+            contenido. No se crea nada; se devuelve el aviso existente con su
+            estado actual. El detalle de cada envío se consulta en
+            GET /avisos/{id}.
+
+            '
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespuestaAviso'
+              example:
+                id: 696a0cfc-4925-4ee1-8426-41eb5040a0ea
+                estado: enviado
+                creado: false
+        '400':
+          description: Solicitud inválida o error de validación
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                asuntoVacio:
+                  value:
+                    error: El asunto no puede estar vacío
+                mensajeVacio:
+                  value:
+                    error: El mensaje no puede estar vacío
+                emailInvalido:
+                  value:
+                    error: El destinatario 1 debe tener un email válido
+                sinDestinatarios:
+                  value:
+                    error: Debe incluir al menos un destinatario
+                canalInvalido:
+                  value:
+                    error: El destinatario 1 tiene un canal inválido. Solo se permite email
+                sinIdempotencia:
+                  value:
+                    error: El encabezado Idempotency-Key es obligatorio
+        '401':
+          description: API Key faltante o inválida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Credenciales inválidas
+        '403':
+          description: Credencial o sistema no autorizado
+        '409':
+          description: Conflicto de idempotencia
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Idempotency-Key utilizada con otro contenido
+        '500':
+          description: Error interno del servidor
+        '415':
+          description: Content-Type debe ser application/json
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Content-Type debe ser application/json
+        '413':
+          description: El cuerpo de la solicitud supera los 64 KB
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Solicitud demasiado grande
+  /avisos/{id}:
+    get:
+      tags:
+      - Avisos
+      summary: Consultar el estado de un aviso
+      description: 'Devuelve la información de un aviso y el estado
+
+        individual de cada correo electrónico.
+
+
+        Solo permite consultar avisos pertenecientes
+
+        al sistema autenticado mediante X-API-Key.
+
+        '
+      operationId: consultarAviso
+      parameters:
+      - name: id
+        in: path
+        description: Identificador UUID del aviso
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 696a0cfc-4925-4ee1-8426-41eb5040a0ea
+      responses:
+        '200':
+          description: Estado del aviso obtenido correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  asunto:
+                    type: string
+                  mensaje:
+                    type: string
+                  referencia:
+                    type: string
+                    nullable: true
+                  creado_en:
+                    type: string
+                    format: date-time
+                  estado:
+                    $ref: '#/components/schemas/EstadoAviso'
+                  envios:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        canal:
+                          type: string
+                          enum:
+                          - email
+                        destino:
+                          type: string
+                          format: email
+                        estado:
+                          type: string
+                          description: 'pendiente: en cola o esperando un
+                            reintento; procesando: se está enviando; enviado:
+                            Gmail lo aceptó; fallido: no se va a reintentar.
+
+                            '
+                          enum:
+                          - pendiente
+                          - procesando
+                          - enviado
+                          - fallido
+                        intentos:
+                          type: integer
+                          description: 'Intentos de envío realizados (máximo
+                            configurado por envío). Las esperas por la cuenta
+                            remitente (token revocado o límite de Gmail) no
+                            cuentan como intento.
+
+                            '
+                        enviado_en:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        ultimo_error:
+                          type: string
+                          nullable: true
+                          description: 'Último problema registrado. Un envío
+                            pendiente puede tener texto aquí sin haber
+                            fallado: por ejemplo, "Remitente pausado por límite
+                            de envío de Gmail hasta <fecha>; se reintentará
+                            entonces" o "Remitente sin autorización vigente; se
+                            reintentará cuando se renueve el token". Si la
+                            cuenta remitente sigue sin autorización más de 48 h,
+                            el envío queda fallido con "Remitente sin
+                            autorización vigente durante más de 48 h".
+
+                            '
+              example:
+                id: 696a0cfc-4925-4ee1-8426-41eb5040a0ea
+                asunto: Prueba de envío a dos destinatarios
+                mensaje: Este es un correo de prueba enviado desde nuestra API.
+                creado_en: 2026-10-22 14:23:23.694164+00:00
+                estado: enviado
+                envios:
+                - id: 53d3a587-5204-44b8-aaf3-5638eaf68794
+                  canal: email
+                  destino: primer_correo@gmail.com
+                  estado: enviado
+                  intentos: 1
+                  enviado_en: 2026-10-22 14:25:04.183362+00:00
+                  ultimo_error: null
+                - id: 77957513-71e5-4e06-a329-056939a11726
+                  canal: email
+                  destino: segundo_correo@gmail.com
+                  estado: enviado
+                  intentos: 1
+                  enviado_en: 2026-10-22 14:24:01.888649+00:00
+                  ultimo_error: null
+                referencia: null
+        '400':
+          description: El identificador del aviso no es un UUID válido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: ID de aviso inválido
+        '401':
+          description: API Key faltante o inválida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Credenciales inválidas
+        '403':
+          description: Credencial o sistema no autorizado
+        '404':
+          description: 'Aviso inexistente o perteneciente a otro sistema.
+
+            '
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Aviso no encontrado
+        '500':
+          description: Error interno del servidor
+components:
+  schemas:
+    EstadoAviso:
+      type: string
+      description: 'Estado agregado del aviso según sus envíos: pendiente si
+        alguno está pendiente o procesando; enviado si todos se enviaron;
+        fallido si todos fallaron; parcial si terminaron con resultados
+        mixtos.
+
+        '
+      enum:
+      - pendiente
+      - enviado
+      - parcial
+      - fallido
+    RespuestaAviso:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        estado:
+          $ref: '#/components/schemas/EstadoAviso'
+        creado:
+          type: boolean
+          description: true si la solicitud creó el aviso; false si es una
+            repetición idempotente.
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      description: 'Clave de autenticación asignada a cada sistema externo.
+
+        Debe enviarse en el encabezado X-API-Key.
+
+        '
+      name: X-API-Key
+      in: header

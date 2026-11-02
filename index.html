@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API de Notificaciones por Email</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    body { margin: 0; background: #fafafa; font-family: Arial, sans-serif; }
+    .instrucciones { max-width: 1400px; margin: auto; padding: 24px 20px 8px; line-height: 1.6; }
+    .instrucciones h1 { font-size: 24px; margin: 0 0 12px; }
+  </style>
+</head>
+<body>
+  <section class="instrucciones" aria-label="Instrucciones de prueba">
+    <h1>Pruebas de la API de notificaciones</h1>
+    <p>Ingresá tu API Key en <strong>Authorize</strong>. Usá <strong>Try it out</strong> y después <strong>Execute</strong> para probar cada operación.</p>
+    <ol>
+      <li>Verificá tu clave con <code>GET /avisos</code>.</li>
+      <li>Creá un aviso con <code>POST /avisos</code>. Indicá un correo propio y una <code>Idempotency-Key</code> nueva para cada aviso diferente.</li>
+      <li>Copiá el <code>id</code> recibido y consultá <code>GET /avisos/{id}</code>. Un resultado <code>202</code> significa aceptado, el envío se procesa después.</li>
+    </ol>
+    <p><strong>Los envíos son reales.</strong> Cada grupo debe usar su propia clave. La página no incluye credenciales.</p>
+    <p><a href="./openapi.yaml" download>Descargar contrato OpenAPI</a></p>
+  </section>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = function () {
+      window.ui = SwaggerUIBundle({
+        url: "./openapi.yaml",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        persistAuthorization: false,
+        validatorUrl: null,
+        supportedSubmitMethods: ["get", "post"],
+        presets: [SwaggerUIBundle.presets.apis],
+        layout: "BaseLayout"
+      });
+    };
+  </script>
+</body>
+</html>
